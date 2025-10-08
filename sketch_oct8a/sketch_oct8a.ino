@@ -21,11 +21,14 @@ const unsigned long SAMPLE_DT_MS     = 20;   // 50 Hz sampling
 const unsigned long REPORT_EVERY_MS  = 100;  // Compute features every 100 ms
 const size_t        SMA_LEN          = 3;    // Smoothing
 const size_t        WINDOW_SIZE      = 20;   // Sliding window for features
-const float         THRESHOLD        = 0.015; // Movement detection threshold
+const float         THRESHOLD        = 0.05; // Movement detection threshold (increased for new orientation)
 
 // Wrist orientation thresholds (for armed/disarmed state detection)
-const float         ARM_THRESHOLD    = 0.3;  // Rotate wrist RIGHT past this (X goes positive) to arm
-const float         DISARM_THRESHOLD = 0.1;  // Return past this (X back toward 0) to disarm
+const float         ARM_THRESHOLD      = 0.4;  // Rotate wrist RIGHT past this (X goes positive) to arm
+const float         DISARM_THRESHOLD   = 0.15; // Return past this (X back toward 0) to disarm
+const float         DISARMING_ZONE     = 0.45; // Below this = starting to disarm, disable gesture detection
+const unsigned long ARM_SETTLE_MS      = 700;  // Wait 700ms after arming before detecting gestures
+const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down")
 String CURRENT_LABEL = "right";
@@ -101,6 +104,9 @@ void loop() {
   static bool inMotion = false;
   static String motionLabel = "still";
   static bool isArmed = false;  // Wrist state: armed when rotated right
+  static unsigned long armTime = 0;  // Time when wrist was armed (for settling)
+  static unsigned long disarmTime = 0;  // Time when wrist was disarmed (for settling)
+  static float currentSmoothAx = 0;  // Current smoothed X value for disarming detection
 
   unsigned long now = millis();
 
@@ -113,15 +119,20 @@ void loop() {
       
       // Smooth X-axis for wrist state detection
       float smoothAx = smaUpdate(ax, smaOrientX, smaOrientHeadX, smaOrientCountX);
+      currentSmoothAx = smoothAx;  // Save for use in feature computation section
       
       // Hysteresis-based wrist state detection
       // When wrist rotates RIGHT (like checking watch), X-axis becomes more positive
       if (!isArmed && smoothAx > ARM_THRESHOLD) {
         isArmed = true;
-        Serial.println(">>> ARMED - Gesture detection enabled");
+        armTime = now;  // Record when we armed (for settling period)
+        Serial.println(">>> ARMED - Settling...");
       }
       else if (isArmed && smoothAx < DISARM_THRESHOLD) {
         isArmed = false;
+        disarmTime = now;  // Record when we disarmed (for settling period)
+        inMotion = false;  // Force end any ongoing motion
+        motionLabel = "still";  // Reset label immediately
         Serial.println(">>> DISARMED - Safe to recenter");
       }
       
@@ -153,21 +164,53 @@ void loop() {
     bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
 
     if (okX && okY && okZ) {
-      // Detect motion start/end (only when wrist is armed)
-      bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
-
-      if (motionNow && !inMotion && isArmed) {
-        // Motion detected AND wrist is armed - record as genuine gesture
-        inMotion = true;
-        motionLabel = CURRENT_LABEL;
-      } 
-      else if (!motionNow && inMotion) {
-        // Motion ended
-        inMotion = false;
-        motionLabel = "still";
+      // Check if we're in settling period (either after arming or disarming)
+      static bool wasSettling = false;
+      bool isArmSettled = !isArmed || (now - armTime >= ARM_SETTLE_MS);
+      bool isDisarmSettled = (now - disarmTime >= DISARM_SETTLE_MS);
+      bool isSettled = isArmSettled && isDisarmSettled;
+      
+      // Notify when arm settling period completes
+      if (isArmed && !wasSettling && !isArmSettled) {
+        wasSettling = true;
       }
-      else if (motionNow && !isArmed) {
-        // Motion detected but wrist not armed - ignore (this is recentering)
+      else if (isArmed && wasSettling && isArmSettled) {
+        Serial.println(">>> READY - Gesture detection active");
+        wasSettling = false;
+      }
+      else if (!isArmed) {
+        wasSettling = false;
+      }
+      
+      // Check if we're in the disarming zone (starting to tilt back to flat)
+      bool isDisarming = isArmed && (currentSmoothAx < DISARMING_ZONE);
+      
+      // PRIORITY: If we're disarming, immediately end any motion and ignore new motion
+      if (isDisarming) {
+        if (inMotion) {
+          inMotion = false;
+          motionLabel = "still";
+        }
+      }
+      // Only detect motion if NOT disarming
+      else {
+        bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
+
+        if (motionNow && !inMotion && isArmed && isSettled) {
+          // Motion detected AND wrist is armed AND settling period over - record as genuine gesture
+          inMotion = true;
+          motionLabel = CURRENT_LABEL;
+        } 
+        else if (!motionNow && inMotion) {
+          // Motion ended naturally
+          inMotion = false;
+          motionLabel = "still";
+        }
+      }
+      
+      // Handle motion when not armed (recentering)
+      if (!isArmed && inMotion) {
+        inMotion = false;
         motionLabel = "still";
       }
 
