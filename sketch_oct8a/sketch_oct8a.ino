@@ -23,6 +23,10 @@ const size_t        SMA_LEN          = 3;    // Smoothing
 const size_t        WINDOW_SIZE      = 20;   // Sliding window for features
 const float         THRESHOLD        = 0.015; // Movement detection threshold
 
+// Wrist orientation thresholds (for armed/disarmed state detection)
+const float         ARM_THRESHOLD    = 0.3;  // Rotate wrist RIGHT past this (X goes positive) to arm
+const float         DISARM_THRESHOLD = 0.1;  // Return past this (X back toward 0) to disarm
+
 // Set this label before each test motion (e.g. "right", "left", "up", "down")
 String CURRENT_LABEL = "right";
 
@@ -34,6 +38,11 @@ const char* FEATURES_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214";
 float smaBufX[SMA_LEN], smaBufY[SMA_LEN], smaBufZ[SMA_LEN];
 size_t smaHeadX=0, smaHeadY=0, smaHeadZ=0;
 size_t smaCountX=0, smaCountY=0, smaCountZ=0;
+
+// SMA buffers for wrist orientation detection (smaller window for responsiveness)
+float smaOrientX[3];
+size_t smaOrientHeadX=0;
+size_t smaOrientCountX=0;
 
 float smaUpdate(float v, float *buf, size_t &head, size_t &count) {
   buf[head] = v;
@@ -81,7 +90,8 @@ void setup() {
 
   if (!IMU.begin()) { Serial.println("IMU init failed!"); while(1); }
 
-  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,label");
+  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label");
+  Serial.println("System ready. Rotate wrist right to ARM gesture detection.");
 }
 
 // ================= Loop =================
@@ -90,6 +100,7 @@ void loop() {
   static unsigned long lastReport = 0;
   static bool inMotion = false;
   static String motionLabel = "still";
+  static bool isArmed = false;  // Wrist state: armed when rotated right
 
   unsigned long now = millis();
 
@@ -99,6 +110,22 @@ void loop() {
     float ax, ay, az;
     if (IMU.accelerationAvailable()) {
       IMU.readAcceleration(ax, ay, az);
+      
+      // Smooth X-axis for wrist state detection
+      float smoothAx = smaUpdate(ax, smaOrientX, smaOrientHeadX, smaOrientCountX);
+      
+      // Hysteresis-based wrist state detection
+      // When wrist rotates RIGHT (like checking watch), X-axis becomes more positive
+      if (!isArmed && smoothAx > ARM_THRESHOLD) {
+        isArmed = true;
+        Serial.println(">>> ARMED - Gesture detection enabled");
+      }
+      else if (isArmed && smoothAx < DISARM_THRESHOLD) {
+        isArmed = false;
+        Serial.println(">>> DISARMED - Safe to recenter");
+      }
+      
+      // Smooth acceleration for motion detection (existing logic)
       float fx = smaUpdate(ax, smaBufX, smaHeadX, smaCountX);
       float fy = smaUpdate(ay, smaBufY, smaHeadY, smaCountY);
       float fz = smaUpdate(az, smaBufZ, smaHeadZ, smaCountZ);
@@ -107,6 +134,11 @@ void loop() {
       pushWin(fz, winZ, headZ, cntZ);
     }
   }
+  float gx, gy, gz;
+  IMU.readGyroscope(gx, gy, gz);  // rotational velocity
+  float gyroX = fabs(gx);
+  float gyroY = fabs(gy);
+  float gyroZ = fabs(gz);
 
   // Compute features periodically
   if (now - lastReport >= REPORT_EVERY_MS) {
@@ -121,25 +153,30 @@ void loop() {
     bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
 
     if (okX && okY && okZ) {
-      // Detect motion start/end
+      // Detect motion start/end (only when wrist is armed)
       bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
 
-      if (motionNow && !inMotion) {
+      if (motionNow && !inMotion && isArmed) {
+        // Motion detected AND wrist is armed - record as genuine gesture
         inMotion = true;
         motionLabel = CURRENT_LABEL;
-        Serial.println("MOTION_START");
       } 
       else if (!motionNow && inMotion) {
+        // Motion ended
         inMotion = false;
         motionLabel = "still";
-        Serial.println("MOTION_END");
+      }
+      else if (motionNow && !isArmed) {
+        // Motion detected but wrist not armed - ignore (this is recentering)
+        motionLabel = "still";
       }
 
-      // Print CSV line
-      char out[128];
+      // Print CSV line with wrist armed status
+      char out[160];
       snprintf(out, sizeof(out),
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s",
+        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s",
         meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
+        isArmed ? 1 : 0,
         motionLabel.c_str());
       Serial.println(out);
     }
