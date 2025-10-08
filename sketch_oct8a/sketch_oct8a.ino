@@ -30,8 +30,11 @@ const float         DISARMING_ZONE     = 0.45; // Below this = starting to disar
 const unsigned long ARM_SETTLE_MS      = 700;  // Wait 700ms after arming before detecting gestures
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
-// Set this label before each test motion (e.g. "right", "left", "up", "down")
+// Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
 String CURRENT_LABEL = "right";
+
+// Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
+String STUDENT_ID = "11611553";
 
 // BLE UUIDs (optional if you’re only using Serial)
 const char* SERVICE_UUID       = "19B10000-E8F2-537E-4F6C-D104768A1214";
@@ -93,7 +96,7 @@ void setup() {
 
   if (!IMU.begin()) { Serial.println("IMU init failed!"); while(1); }
 
-  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label");
+  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId");
   Serial.println("System ready. Rotate wrist right to ARM gesture detection.");
 }
 
@@ -126,14 +129,14 @@ void loop() {
       if (!isArmed && smoothAx > ARM_THRESHOLD) {
         isArmed = true;
         armTime = now;  // Record when we armed (for settling period)
-        Serial.println(">>> ARMED - Settling...");
+        // Serial.println(">>> ARMED - Settling...");  // Commented out for clean CSV data
       }
       else if (isArmed && smoothAx < DISARM_THRESHOLD) {
         isArmed = false;
         disarmTime = now;  // Record when we disarmed (for settling period)
         inMotion = false;  // Force end any ongoing motion
         motionLabel = "still";  // Reset label immediately
-        Serial.println(">>> DISARMED - Safe to recenter");
+        // Serial.println(">>> DISARMED - Safe to recenter");  // Commented out for clean CSV data
       }
       
       // Smooth acceleration for motion detection (existing logic)
@@ -175,7 +178,7 @@ void loop() {
         wasSettling = true;
       }
       else if (isArmed && wasSettling && isArmSettled) {
-        Serial.println(">>> READY - Gesture detection active");
+        // Serial.println(">>> READY - Gesture detection active");  // Commented out for clean CSV data
         wasSettling = false;
       }
       else if (!isArmed) {
@@ -214,13 +217,14 @@ void loop() {
         motionLabel = "still";
       }
 
-      // Print CSV line with wrist armed status
-      char out[160];
+      // Print CSV line with wrist armed status and student ID
+      char out[200];
       snprintf(out, sizeof(out),
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s",
+        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
         meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
         isArmed ? 1 : 0,
-        motionLabel.c_str());
+        motionLabel.c_str(),
+        STUDENT_ID.c_str());
       Serial.println(out);
     }
   }
