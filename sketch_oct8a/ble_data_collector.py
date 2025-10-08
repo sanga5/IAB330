@@ -71,18 +71,29 @@ async def find_arduino():
     
     devices = await BleakScanner.discover(timeout=10.0)
     
+    print(f"\n📱 Found {len(devices)} BLE devices:")
+    for i, device in enumerate(devices, 1):
+        print(f"   {i}. {device.name or 'Unknown'} ({device.address})")
+    
     for device in devices:
-        # Look for Arduino by name or service UUID
+        # Look for Arduino by name
         if device.name and ("Arduino" in device.name or "Nano" in device.name):
-            print(f"✓ Found Arduino: {device.name} ({device.address})")
-            return device.address
-        
-        # Alternative: check if device advertises our service UUID
-        if device.metadata.get("uuids") and SERVICE_UUID.lower() in [u.lower() for u in device.metadata["uuids"]]:
-            print(f"✓ Found device with matching service: {device.name or 'Unknown'} ({device.address})")
+            print(f"\n✓ Found Arduino: {device.name} ({device.address})")
             return device.address
     
-    print("❌ Arduino not found. Make sure it's powered on and BLE is active.")
+    # If not found by name, let user choose
+    print("\n❌ Arduino not found by name.")
+    print("💡 Enter device number to try, or 0 to exit:")
+    
+    try:
+        choice = int(input("Device number: "))
+        if choice > 0 and choice <= len(devices):
+            selected = devices[choice - 1]
+            print(f"✓ Selected: {selected.name or 'Unknown'} ({selected.address})")
+            return selected.address
+    except (ValueError, KeyboardInterrupt):
+        pass
+    
     return None
 
 

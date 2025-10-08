@@ -1,5 +1,8 @@
 /*
-  Nano 33 IoT — Motion Direction Logger for ML
+  Nano 33 IoT — Motion Direction Lo// BLE Service and Characteristic
+
+
+// ================= SMA =================for ML
   --------------------------------------------
   Computes windowed features per axis (X, Y, Z):
   mean, std, range.
@@ -15,6 +18,9 @@
 #include <Arduino_LSM6DS3.h>
 #include <ArduinoBLE.h>
 #include <math.h>
+
+BLEService motionService("19B10000-E8F2-537E-4F6C-D104768A1214");
+BLEStringCharacteristic featuresChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify, 200);
 
 // ================= CONFIG =================
 const unsigned long SAMPLE_DT_MS     = 20;   // 50 Hz sampling
@@ -94,10 +100,36 @@ void setup() {
   Serial.begin(115200);
   while(!Serial);
 
-  if (!IMU.begin()) { Serial.println("IMU init failed!"); while(1); }
+  // Initialize IMU
+  if (!IMU.begin()) { 
+    Serial.println("IMU init failed!"); 
+    while(1); 
+  }
+
+  // Initialize BLE
+  if (!BLE.begin()) {
+    Serial.println("BLE init failed!");
+    while(1);
+  }
+
+  // Set BLE local name and advertised service
+  BLE.setLocalName("Arduino Nano 33 IoT");
+  BLE.setAdvertisedService(motionService);
+
+  // Add characteristic to service
+  motionService.addCharacteristic(featuresChar);
+
+  // Add service
+  BLE.addService(motionService);
+
+  // Set initial value
+  featuresChar.writeValue("0,0,0,0,0,0,0,0,0,0,still,0");
+
+  // Start advertising
+  BLE.advertise();
 
   Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId");
-  Serial.println("System ready. Rotate wrist right to ARM gesture detection.");
+  Serial.println("BLE Active - Device name: Arduino Nano 33 IoT");
 }
 
 // ================= Loop =================
@@ -112,6 +144,20 @@ void loop() {
   static float currentSmoothAx = 0;  // Current smoothed X value for disarming detection
 
   unsigned long now = millis();
+
+  // Handle BLE connections
+  BLEDevice central = BLE.central();
+  static bool wasConnected = false;
+  
+  if (central && !wasConnected) {
+    wasConnected = true;
+    Serial.print("BLE connected: ");
+    Serial.println(central.address());
+  }
+  else if (!central && wasConnected) {
+    wasConnected = false;
+    Serial.println("BLE disconnected");
+  }
 
   // Sample IMU
   if (now - lastSample >= SAMPLE_DT_MS) {
@@ -225,7 +271,15 @@ void loop() {
         isArmed ? 1 : 0,
         motionLabel.c_str(),
         STUDENT_ID.c_str());
+      
+      // Send to Serial
       Serial.println(out);
+      
+      // Send to BLE if client is connected
+      BLEDevice central = BLE.central();
+      if (central && central.connected()) {
+        featuresChar.writeValue(out);
+      }
     }
   }
 }
