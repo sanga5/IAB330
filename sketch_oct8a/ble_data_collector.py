@@ -112,10 +112,9 @@ async def collect_data(address):
         
         print(f"✓ Connected to Arduino\n")
         
-        # Check if our service exists
-        services = await client.get_services()
+        # Check if our service exists (Bleak 1.1.0 uses .services property)
         service_found = False
-        for service in services:
+        for service in client.services:
             if service.uuid.lower() == SERVICE_UUID.lower():
                 service_found = True
                 break
@@ -123,7 +122,7 @@ async def collect_data(address):
         if not service_found:
             print(f"❌ Service {SERVICE_UUID} not found on device")
             print("   Available services:")
-            for service in services:
+            for service in client.services:
                 print(f"   - {service.uuid}")
             return
         
