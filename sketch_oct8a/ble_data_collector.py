@@ -75,25 +75,14 @@ async def find_arduino():
     for i, device in enumerate(devices, 1):
         print(f"   {i}. {device.name or 'Unknown'} ({device.address})")
     
+    # Look for device named "group5"
     for device in devices:
-        # Look for Arduino by name
-        if device.name and ("Arduino" in device.name or "Nano" in device.name):
-            print(f"\n✓ Found Arduino: {device.name} ({device.address})")
+        if device.name and device.name.lower() == "group5":
+            print(f"\n✓ Found group5 Arduino: {device.name} ({device.address})")
             return device.address
     
-    # If not found by name, let user choose
-    print("\n❌ Arduino not found by name.")
-    print("💡 Enter device number to try, or 0 to exit:")
-    
-    try:
-        choice = int(input("Device number: "))
-        if choice > 0 and choice <= len(devices):
-            selected = devices[choice - 1]
-            print(f"✓ Selected: {selected.name or 'Unknown'} ({selected.address})")
-            return selected.address
-    except (ValueError, KeyboardInterrupt):
-        pass
-    
+    print("\n❌ Arduino named 'group5' not found.")
+    print("💡 Make sure the device name in Arduino code is set to 'group5'")
     return None
 
 

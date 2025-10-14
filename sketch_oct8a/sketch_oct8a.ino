@@ -113,7 +113,7 @@ void setup() {
   }
 
   // Set BLE local name and advertised service
-  BLE.setLocalName("Arduino Nano 33 IoT");
+  BLE.setLocalName("Group5");
   BLE.setAdvertisedService(motionService);
 
   // Add characteristic to service
