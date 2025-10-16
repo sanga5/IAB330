@@ -1,0 +1,24 @@
+# Virtual environment
+sketch_oct8a/venv/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Model files (optional - these are generated)
+*.pkl
+
+# CSV data files (optional - these are generated)
+motion_data_*.csv
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
