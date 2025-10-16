@@ -3,25 +3,82 @@ Live SVM Motion Direction Predictor
 Receives BLE data from Arduino and predicts movement direction in real-time
 """
 import asyncio
-import numpy as np
-import joblib
+import sys
+import os
+
+# Auto-install missing packages
+def install_and_import(package_name, import_name=None):
+    """Install package if missing and import it"""
+    if import_name is None:
+        import_name = package_name
+    
+    try:
+        return __import__(import_name)
+    except ImportError:
+        print(f"📦 Installing missing package: {package_name}")
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+        return __import__(import_name)
+
+# Install and import required packages
+print("🔧 Checking required packages...")
+np = install_and_import("numpy")
+joblib = install_and_import("joblib")
+bleak_module = install_and_import("bleak")
 from bleak import BleakClient, BleakScanner
 from datetime import datetime
-import sys
+print("✅ All packages ready!")
 
 # BLE Service and Characteristic UUIDs (from your Arduino code)
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 FEATURES_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 
 # Load trained SVM model, scaler, and label encoder
-try:
-    svm_model = joblib.load('svm_motion_classifier.pkl')
-    scaler = joblib.load('feature_scaler.pkl')
-    label_encoder = joblib.load('label_encoder.pkl')
-    print("✅ Loaded trained SVM model successfully")
-except FileNotFoundError as e:
-    print(f"❌ Error loading model files: {e}")
-    print("💡 Make sure you've trained your SVM model first by running SVM.ipynb")
+def load_model_with_fallback():
+    """Load model files with helpful error messages and fallback options"""
+    model_files = {
+        'svm_motion_classifier.pkl': 'SVM model',
+        'feature_scaler.pkl': 'Feature scaler', 
+        'label_encoder.pkl': 'Label encoder'
+    }
+    
+    missing_files = []
+    for file, description in model_files.items():
+        if not os.path.exists(file):
+            missing_files.append(f"{file} ({description})")
+    
+    if missing_files:
+        print("❌ Missing model files:")
+        for file in missing_files:
+            print(f"   - {file}")
+        print("\n💡 Solutions:")
+        print("1. Make sure you're in the correct directory (sketch_oct8a/)")
+        print("2. Pull the latest changes: git pull origin SVM")
+        print("3. Check if files exist: ls -la *.pkl")
+        print("4. If needed, train the model by running SVM.ipynb")
+        return None, None, None
+    
+    try:
+        svm_model = joblib.load('svm_motion_classifier.pkl')
+        scaler = joblib.load('feature_scaler.pkl')
+        label_encoder = joblib.load('label_encoder.pkl')
+        
+        print("✅ Loaded trained SVM model successfully")
+        print(f"📊 Model: {type(svm_model).__name__} with {svm_model.kernel} kernel")
+        print(f"🏷️  Labels: {', '.join(label_encoder.classes_)}")
+        return svm_model, scaler, label_encoder
+        
+    except Exception as e:
+        print(f"❌ Error loading model files: {e}")
+        print("💡 Model files may be corrupted. Try re-training the model.")
+        return None, None, None
+
+# Load the model
+import os
+svm_model, scaler, label_encoder = load_model_with_fallback()
+
+if svm_model is None:
+    print("\n🚫 Cannot proceed without trained model. Exiting...")
     sys.exit(1)
 
 # Prediction statistics
@@ -126,29 +183,25 @@ def notification_handler(sender, data):
 
 async def find_arduino():
     """
-    Scan for Arduino device
+    Scan for Arduino Nano 33 IoT device
+    Returns the device address or None
     """
-    print("🔍 Scanning for Arduino device...")
+    print("🔍 Scanning for Arduino Nano 33 IoT...")
     
     devices = await BleakScanner.discover(timeout=10.0)
     
+    print(f"\n📱 Found {len(devices)} BLE devices:")
+    for i, device in enumerate(devices, 1):
+        print(f"   {i}. {device.name or 'Unknown'} ({device.address})")
+    
+    # Look for device named "group5"
     for device in devices:
-        if device.name and ("Arduino" in device.name or "Nano" in device.name):
-            print(f"✅ Found Arduino: {device.name} ({device.address})")
+        if device.name and device.name.lower() == "group5":
+            print(f"\n✓ Found group5 Arduino: {device.name} ({device.address})")
             return device.address
     
-    # If no Arduino found by name, list all devices
-    print("⚠️  No Arduino device found by name. Available devices:")
-    for device in devices:
-        name = device.name or "Unknown"
-        print(f"   - {name} ({device.address})")
-    
-    # Let user choose manually
-    if devices:
-        choice = input("\nEnter device address to connect to (or press Enter to exit): ")
-        if choice.strip():
-            return choice.strip()
-    
+    print("\n❌ Arduino named 'group5' not found.")
+    print("💡 Make sure the device name in Arduino code is set to 'group5'")
     return None
 
 async def run_live_prediction(address):
@@ -212,4 +265,25 @@ async def main():
         print(f"❌ Unexpected error: {e}")
 
 if __name__ == "__main__":
+    # Pre-flight checks
+    print("🚀 Starting Live SVM Motion Direction Predictor")
+    print("=" * 60)
+    
+    # Check if we're in the right directory
+    if not os.path.exists('live_predictor.py'):
+        print("⚠️  Warning: You might not be in the correct directory")
+        print("💡 Navigate to: cd IAB330/sketch_oct8a/")
+    
+    # Check Bluetooth
+    print("🔵 Checking Bluetooth availability...")
+    try:
+        import bluetooth
+        print("✅ Bluetooth support detected")
+    except:
+        print("⚠️  No bluetooth module found (this is normal on some systems)")
+    
+    print("\n🎯 Ready to predict motion directions!")
+    print("💡 Make sure your Arduino is broadcasting BLE data")
+    print("=" * 60)
+    
     asyncio.run(main())
