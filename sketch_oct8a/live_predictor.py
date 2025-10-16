@@ -5,28 +5,19 @@ Receives BLE data from Arduino and predicts movement direction in real-time
 import asyncio
 import sys
 import os
-
-# Auto-install missing packages
-def install_and_import(package_name, import_name=None):
-    """Install package if missing and import it"""
-    if import_name is None:
-        import_name = package_name
-    
-    try:
-        return __import__(import_name)
-    except ImportError:
-        print(f"📦 Installing missing package: {package_name}")
-        import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
-        return __import__(import_name)
-
-# Install and import required packages
-print("🔧 Checking required packages...")
-np = install_and_import("numpy")
-joblib = install_and_import("joblib")
-bleak_module = install_and_import("bleak")
+import numpy as np
+import joblib
 from bleak import BleakClient, BleakScanner
 from datetime import datetime
+
+print("🔧 Package versions:")
+print(f"   NumPy: {np.__version__}")
+print(f"   Joblib: {joblib.__version__}")
+try:
+    import sklearn
+    print(f"   Scikit-learn: {sklearn.__version__}")
+except ImportError:
+    print("   Scikit-learn: Not available")
 print("✅ All packages ready!")
 
 # BLE Service and Characteristic UUIDs (from your Arduino code)
