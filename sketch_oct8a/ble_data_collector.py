@@ -18,7 +18,9 @@ OUTPUT_FILE = f"motion_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
 # CSV header (matches your Arduino output)
 CSV_HEADER = ["meanX", "sdX", "rangeX", "meanY", "sdY", "rangeY", 
-              "meanZ", "sdZ", "rangeZ", "wristArmed", "label", "studentId"]
+              "meanZ", "sdZ", "rangeZ", "meanGx", "sdGx", "rangeGx",
+              "meanGy", "sdGy", "rangeGy", "meanGz", "sdGz", "rangeGz",
+              "label", "studentId"]
 
 # Global variables
 csv_writer = None
@@ -44,9 +46,9 @@ def notification_handler(sender, data):
         # Split CSV line into values
         values = decoded.split(',')
         
-        # Validate we have the right number of columns (12)
-        if len(values) != 12:
-            print(f"⚠️  Skipping malformed line (expected 12 columns, got {len(values)}): {decoded}")
+        # Validate we have the right number of columns (20)
+        if len(values) != 20:
+            print(f"⚠️  Skipping malformed line (expected 20 columns, got {len(values)}): {decoded}")
             return
         
         # Write to CSV
@@ -55,7 +57,7 @@ def notification_handler(sender, data):
         
         # Print progress every 10 samples
         if data_count % 10 == 0:
-            print(f"✓ Collected {data_count} samples... (Label: {values[10]})")
+            print(f"✓ Collected {data_count} samples... (Label: {values[18]})")
         
     except Exception as e:
         print(f"❌ Error processing data: {e}")
