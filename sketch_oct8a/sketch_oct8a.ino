@@ -39,7 +39,7 @@ const unsigned long ARM_SETTLE_MS      = 700;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "";
+String CURRENT_LABEL = "Right";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
 String STUDENT_ID = "11611553";
@@ -134,7 +134,7 @@ void setup() {
   // Start advertising
   BLE.advertise();
 
-  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz,wristArmed,label,studentId");
+  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz,label,studentId");
   Serial.println("BLE Active - Device name: Arduino Nano 33 IoT");
 }
 
