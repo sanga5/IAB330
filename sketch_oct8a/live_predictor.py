@@ -6,6 +6,7 @@ import asyncio
 import sys
 import os
 import numpy as np
+import pandas as pd
 import joblib
 from bleak import BleakClient, BleakScanner
 from datetime import datetime
@@ -79,58 +80,79 @@ confidence_threshold = 0.7  # Only show predictions above this confidence
 def predict_movement_direction(data_string):
     """
     Parse BLE data and predict movement direction
+    Input format: meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId
     """
     global prediction_count
     
     try:
-        # Parse CSV data: meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId
+        # Parse CSV data
         values = data_string.strip().split(',')
         
-        if len(values) < 10:
+        if len(values) < 12:
             return None
-            
-        # Extract features (first 10 values)
-        features = [float(values[i]) for i in range(10)]
-            
-        # Convert to numpy array with proper dtype to avoid casting issues
-        features_array = np.array([features], dtype=np.float32)
         
-        # Scale features
-        features_scaled = scaler.transform(features_array)
+        # Define feature column names (must match training data)
+        feature_columns = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 
+                          'meanZ', 'sdZ', 'rangeZ', 'wristArmed']
         
-        # Make prediction with proper data type handling
-        prediction_encoded = svm_model.predict(features_scaled.astype(np.float32))[0]
+        # Extract the 10 feature values + metadata
+        try:
+            feature_values = [float(values[i]) for i in range(10)]
+            wrist_armed = int(values[9])
+            received_label = values[10].strip()
+            student_id = values[11].strip()
+        except (ValueError, IndexError):
+            return None
+        
+        # Create DataFrame with proper column names (required for scaler)
+        features_dict = {
+            'meanX': [feature_values[0]], 
+            'sdX': [feature_values[1]], 
+            'rangeX': [feature_values[2]],
+            'meanY': [feature_values[3]], 
+            'sdY': [feature_values[4]], 
+            'rangeY': [feature_values[5]],
+            'meanZ': [feature_values[6]], 
+            'sdZ': [feature_values[7]], 
+            'rangeZ': [feature_values[8]],
+            'wristArmed': [wrist_armed]
+        }
+        features_df = pd.DataFrame(features_dict)
+        
+        # Scale features using the trained scaler
+        features_scaled = scaler.transform(features_df)
+        
+        # Make prediction
+        prediction_encoded = svm_model.predict(features_scaled)[0]
         prediction_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
         
-        # Get prediction probabilities if available
+        # Get confidence score
         confidence = 0.0
         if hasattr(svm_model, 'predict_proba'):
-            probabilities = svm_model.predict_proba(features_scaled.astype(np.float32))[0]
+            probabilities = svm_model.predict_proba(features_scaled)[0]
             confidence = float(max(probabilities))
         
         prediction_count += 1
         
         # Format output
         timestamp = datetime.now().strftime("%H:%M:%S")
-        confidence_str = f"({confidence:.2f})" if confidence > 0 else ""
         
         # Color coding for terminal output
         if confidence > confidence_threshold:
             status_icon = "🎯"
-            confidence_color = "HIGH"
         elif confidence > 0.5:
             status_icon = "⚡"
-            confidence_color = "MED "
         else:
             status_icon = "❓"
-            confidence_color = "LOW "
         
         result = {
             'timestamp': timestamp,
             'prediction': prediction_label,
+            'received_label': received_label,
             'confidence': confidence,
             'icon': status_icon,
-            'features': features
+            'features': feature_values,
+            'student_id': student_id
         }
         
         return result
@@ -157,8 +179,10 @@ def notification_handler(sender, data):
         if result:
             # Display prediction
             print(f"{result['icon']} [{result['timestamp']}] "
-                  f"Predicted: {result['prediction'].upper()} "
-                  f"| Confidence: {result['confidence']:.2f}")
+                  f"Predicted: {result['prediction'].upper():6} "
+                  f"| Actual: {result['received_label']:6} "
+                  f"| Confidence: {result['confidence']:.2f} "
+                  f"| Student: {result['student_id']}")
             
             # Show feature values occasionally for debugging
             if prediction_count % 10 == 0:
