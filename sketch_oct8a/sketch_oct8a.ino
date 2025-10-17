@@ -228,10 +228,9 @@ void loop() {
             // Emit exactly one CSV line for this arm/disarm cycle labeled with CURRENT_LABEL
             char out[300];
             snprintf(out, sizeof(out),
-              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
+              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s,%s",
               meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
               meanGx, sdGx, rangeGx, meanGy, sdGy, rangeGy, meanGz, sdGz, rangeGz,
-              0,
               CURRENT_LABEL.c_str(),
               STUDENT_ID.c_str());
 
