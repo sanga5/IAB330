@@ -6,7 +6,6 @@ import asyncio
 import sys
 import os
 import numpy as np
-import pandas as pd
 import joblib
 from bleak import BleakClient, BleakScanner
 from datetime import datetime
@@ -91,10 +90,6 @@ def predict_movement_direction(data_string):
         if len(values) < 12:
             return None
         
-        # Define feature column names (must match training data)
-        feature_columns = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 
-                          'meanZ', 'sdZ', 'rangeZ', 'wristArmed']
-        
         # Extract the 10 feature values + metadata
         try:
             feature_values = [float(values[i]) for i in range(10)]
@@ -104,23 +99,12 @@ def predict_movement_direction(data_string):
         except (ValueError, IndexError):
             return None
         
-        # Create DataFrame with proper column names (required for scaler)
-        features_dict = {
-            'meanX': [feature_values[0]], 
-            'sdX': [feature_values[1]], 
-            'rangeX': [feature_values[2]],
-            'meanY': [feature_values[3]], 
-            'sdY': [feature_values[4]], 
-            'rangeY': [feature_values[5]],
-            'meanZ': [feature_values[6]], 
-            'sdZ': [feature_values[7]], 
-            'rangeZ': [feature_values[8]],
-            'wristArmed': [wrist_armed]
-        }
-        features_df = pd.DataFrame(features_dict)
+        # Convert to numpy array with proper shape for scaler
+        # The scaler expects a 2D array: (n_samples, n_features)
+        features_array = np.array([feature_values], dtype=np.float32)
         
         # Scale features using the trained scaler
-        features_scaled = scaler.transform(features_df)
+        features_scaled = scaler.transform(features_array)
         
         # Make prediction
         prediction_encoded = svm_model.predict(features_scaled)[0]
