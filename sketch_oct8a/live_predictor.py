@@ -86,7 +86,7 @@ confidence_threshold = 0.7  # Only show predictions above this confidence
 def predict_movement_direction(data_string):
     """
     Parse BLE data and predict movement direction
-    Input format: meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId
+    Input format: meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz,wristArmed,label,studentId
     Works with both scaled (SVM) and unscaled (RandomForest, XGBoost) models
     """
     global prediction_count
@@ -95,15 +95,15 @@ def predict_movement_direction(data_string):
         # Parse CSV data
         values = data_string.strip().split(',')
         
-        if len(values) < 12:
+        if len(values) < 21:  # Updated: now expecting 21 values (18 features + 3 metadata)
             return None
         
-        # Extract the 10 feature values + metadata
+        # Extract the 18 feature values + metadata
         try:
-            feature_values = [float(values[i]) for i in range(10)]
-            wrist_armed = int(values[9])
-            received_label = values[10].strip()
-            student_id = values[11].strip()
+            feature_values = [float(values[i]) for i in range(18)]
+            wrist_armed = int(values[18])
+            received_label = values[19].strip()
+            student_id = values[20].strip()
         except (ValueError, IndexError):
             return None
         

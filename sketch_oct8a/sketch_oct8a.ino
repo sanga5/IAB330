@@ -39,7 +39,7 @@ const unsigned long ARM_SETTLE_MS      = 700;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "right";
+String CURRENT_LABEL = "";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
 String STUDENT_ID = "11611553";
@@ -53,8 +53,9 @@ float smaBufX[SMA_LEN], smaBufY[SMA_LEN], smaBufZ[SMA_LEN];
 size_t smaHeadX=0, smaHeadY=0, smaHeadZ=0;
 size_t smaCountX=0, smaCountY=0, smaCountZ=0;
 
-// SMA buffers for wrist orientation detection (smaller window for responsiveness)
-float smaOrientX[3];
+// SMA buffers for wrist orientation detection (larger window to reduce noise)
+const size_t ORIENT_SMA_LEN = 5;  // Increased from 3 for better noise filtering
+float smaOrientX[ORIENT_SMA_LEN];
 size_t smaOrientHeadX=0;
 size_t smaOrientCountX=0;
 
@@ -69,8 +70,11 @@ float smaUpdate(float v, float *buf, size_t &head, size_t &count) {
 
 // ================= Windows =================
 float winX[WINDOW_SIZE], winY[WINDOW_SIZE], winZ[WINDOW_SIZE];
+float winGx[WINDOW_SIZE], winGy[WINDOW_SIZE], winGz[WINDOW_SIZE];  // Gyroscope windows
 size_t headX=0, headY=0, headZ=0;
+size_t headGx=0, headGy=0, headGz=0;  // Gyroscope heads
 size_t cntX=0,  cntY=0,  cntZ=0;
+size_t cntGx=0, cntGy=0, cntGz=0;  // Gyroscope counts
 
 void pushWin(float v, float *win, size_t &head, size_t &cnt) {
   win[head] = v;
@@ -130,13 +134,14 @@ void setup() {
   // Start advertising
   BLE.advertise();
 
-  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId");
+  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz,wristArmed,label,studentId");
   Serial.println("BLE Active - Device name: Arduino Nano 33 IoT");
 }
 
 // ================= Loop =================
 void loop() {
   static unsigned long lastSample = 0;
+  static unsigned long lastGyroSample = 0;
   static unsigned long lastReport = 0;
   static bool inMotion = false;
   static String motionLabel = "still";
@@ -190,7 +195,9 @@ void loop() {
         if (DEBUG_IMMEDIATE_START) {
           collectingWindow = true;
           cntX = cntY = cntZ = 0;
+          cntGx = cntGy = cntGz = 0;
           headX = headY = headZ = 0;
+          headGx = headGy = headGz = 0;
           Serial.println(">>> DEBUG IMMEDIATE START: collectingWindow=true");
         }
       }
@@ -206,21 +213,28 @@ void loop() {
           float meanX, sdX, rangeX;
           float meanY, sdY, rangeY;
           float meanZ, sdZ, rangeZ;
+          float meanGx, sdGx, rangeGx;
+          float meanGy, sdGy, rangeGy;
+          float meanGz, sdGz, rangeGz;
+          
           bool okX = computeFeatures(winX, cntX, meanX, sdX, rangeX);
           bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
           bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
+          bool okGx = computeFeatures(winGx, cntGx, meanGx, sdGx, rangeGx);
+          bool okGy = computeFeatures(winGy, cntGy, meanGy, sdGy, rangeGy);
+          bool okGz = computeFeatures(winGz, cntGz, meanGz, sdGz, rangeGz);
 
-          if (okX && okY && okZ) {
+          if (okX && okY && okZ && okGx && okGy && okGz) {
             // Emit exactly one CSV line for this arm/disarm cycle labeled with CURRENT_LABEL
-            char out[200];
+            char out[300];
             snprintf(out, sizeof(out),
-              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
+              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
               meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
+              meanGx, sdGx, rangeGx, meanGy, sdGy, rangeGy, meanGz, sdGz, rangeGz,
               0,
               CURRENT_LABEL.c_str(),
               STUDENT_ID.c_str());
 
-            Serial.println(">>> DISARM EMIT (one-shot):");
             Serial.println(out);
             BLEDevice central2 = BLE.central();
             if (central2 && central2.connected()) {
@@ -235,7 +249,9 @@ void loop() {
 
         // Clear windows ready for next arm
         cntX = cntY = cntZ = 0;
+        cntGx = cntGy = cntGz = 0;
         headX = headY = headZ = 0;
+        headGx = headGy = headGz = 0;
       }
       
       // Smooth acceleration for motion detection (existing logic)
@@ -250,11 +266,21 @@ void loop() {
       }
     }
   }
-  float gx, gy, gz;
-  IMU.readGyroscope(gx, gy, gz);  // rotational velocity
-  float gyroX = fabs(gx);
-  float gyroY = fabs(gy);
-  float gyroZ = fabs(gz);
+  
+  // Sample Gyroscope
+  if (now - lastGyroSample >= SAMPLE_DT_MS) {
+    lastGyroSample = now;
+    float gx, gy, gz;
+    if (IMU.gyroscopeAvailable()) {
+      IMU.readGyroscope(gx, gy, gz);
+      // Push gyroscope data into windows when collecting
+      if (collectingWindow && !windowEmitted) {
+        pushWin(gx, winGx, headGx, cntGx);
+        pushWin(gy, winGy, headGy, cntGy);
+        pushWin(gz, winGz, headGz, cntGz);
+      }
+    }
+  }
 
   // Compute features periodically (but skip periodic emission while we're in one-shot collection)
   if (now - lastReport >= REPORT_EVERY_MS) {
@@ -272,8 +298,10 @@ void loop() {
       collectingWindow = true;
       // clear any previous data
       cntX = cntY = cntZ = 0;
+      cntGx = cntGy = cntGz = 0;
       headX = headY = headZ = 0;
-      for (size_t i = 0; i < WINDOW_SIZE; i++) { winX[i] = winY[i] = winZ[i] = 0.0f; }
+      headGx = headGy = headGz = 0;
+      for (size_t i = 0; i < WINDOW_SIZE; i++) { winX[i] = winY[i] = winZ[i] = 0.0f; winGx[i] = winGy[i] = winGz[i] = 0.0f; }
       Serial.println(">>> START COLLECTING one-shot window after arm-settle");
     }
 
