@@ -19,17 +19,24 @@ print("=" * 80)
 print("\n📂 Loading data...")
 data = pd.read_csv('n11611553_CombinedTrainingData.csv')
 
-# Remove corrupted samples (where sensor data is all zeros - not including wristArmed flag)
-feature_columns_for_clean = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 'meanZ', 'sdZ', 'rangeZ']
-# Remove rows where ANY of the sensor features are exactly 0 (indicates bad read)
-data_clean = data[~((data[feature_columns_for_clean] == 0).any(axis=1))]
-data_clean = data_clean[data_clean[feature_columns_for_clean].notna().all(axis=1)]
+# Check available columns
+print(f"📋 Available columns: {list(data.columns)}")
 
-# Now define full feature columns including wristArmed
-feature_columns = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 'meanZ', 'sdZ', 'rangeZ', 'wristArmed']
+# Define feature columns - using accelerometer and gyroscope statistics
+feature_columns = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 
+                   'meanZ', 'sdZ', 'rangeZ', 'meanGx', 'sdGx', 'rangeGx',
+                   'meanGy', 'sdGy', 'rangeGy', 'meanGz', 'sdGz', 'rangeGz']
+
+# Remove rows with missing values in feature columns
+data_clean = data[data[feature_columns].notna().all(axis=1)].copy()
+
+# Remove rows where ALL accelerometer features are zero (indicates bad read)
+accel_cols = ['meanX', 'sdX', 'rangeX', 'meanY', 'sdY', 'rangeY', 'meanZ', 'sdZ', 'rangeZ']
+data_clean = data_clean[~((data_clean[accel_cols] == 0).all(axis=1))]
 
 print(f"✅ Loaded {len(data_clean)} samples (removed {len(data) - len(data_clean)} corrupted)")
 print(f"📊 Classes: {list(data_clean['label'].value_counts().index)}")
+print(f"📊 Using {len(feature_columns)} features: Accelerometer (9) + Gyroscope (9)")
 
 # Prepare data
 X = data_clean[feature_columns]
@@ -53,12 +60,13 @@ print("\n" + "=" * 80)
 print("🔄 Training Models...")
 print("=" * 80)
 
-# 1. Random Forest
+# 1. Random Forest (with 18 features)
 print("\n1️⃣  Random Forest Classifier...")
 rf_model = RandomForestClassifier(
-    n_estimators=100,
-    max_depth=10,
-    min_samples_split=5,
+    n_estimators=150,
+    max_depth=12,
+    min_samples_split=4,
+    min_samples_leaf=2,
     random_state=42,
     n_jobs=-1
 )
@@ -102,10 +110,10 @@ try:
 except ImportError:
     print("\n2️⃣  XGBoost - Not installed (skipping)")
 
-# 3. SVM with RBF (for comparison)
+# 3. SVM with RBF (for comparison) - uses all 18 features
 from sklearn.svm import SVC
 print("\n3️⃣  SVM with RBF Kernel...")
-svm_model = SVC(kernel='rbf', C=10, gamma='scale', random_state=42, probability=True)
+svm_model = SVC(kernel='rbf', C=50, gamma='scale', random_state=42, probability=True)
 svm_model.fit(X_train_scaled, y_train)
 svm_pred = svm_model.predict(X_test_scaled)
 svm_acc = accuracy_score(y_test, svm_pred)
@@ -151,11 +159,13 @@ print(cm)
 
 # Feature importance (for tree-based models)
 if hasattr(best_model_obj['model'], 'feature_importances_'):
-    print("\nTop 5 Most Important Features:")
+    print("\nTop 8 Most Important Features:")
     importances = best_model_obj['model'].feature_importances_
-    indices = np.argsort(importances)[::-1][:5]
+    indices = np.argsort(importances)[::-1][:8]
     for i, idx in enumerate(indices, 1):
         print(f"   {i}. {feature_columns[idx]}: {importances[idx]:.4f}")
+else:
+    print("\n(Feature importance not available for this model type)")
 
 # Save the best model
 print("\n" + "=" * 80)
