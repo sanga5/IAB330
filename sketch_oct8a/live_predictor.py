@@ -24,45 +24,52 @@ print("✅ All packages ready!")
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 FEATURES_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 
-# Load trained SVM model, scaler, and label encoder
+# Load trained model, scaler, and label encoder
 def load_model_with_fallback():
     """Load model files with helpful error messages and fallback options"""
-    model_files = {
-        'svm_motion_classifier.pkl': 'SVM model',
-        'feature_scaler.pkl': 'Feature scaler', 
-        'label_encoder.pkl': 'Label encoder'
-    }
+    # Try to load the best model first, fall back to SVM
+    model_files_priority = [
+        ('best_motion_classifier.pkl', 'Best AutoML model'),
+        ('svm_motion_classifier.pkl', 'SVM model')
+    ]
     
-    missing_files = []
-    for file, description in model_files.items():
-        if not os.path.exists(file):
-            missing_files.append(f"{file} ({description})")
+    scaler = None
+    model = None
+    label_encoder = None
+    model_name = None
     
-    if missing_files:
-        print("❌ Missing model files:")
-        for file in missing_files:
-            print(f"   - {file}")
-        print("\n💡 Solutions:")
-        print("1. Make sure you're in the correct directory (sketch_oct8a/)")
-        print("2. Pull the latest changes: git pull origin SVM")
-        print("3. Check if files exist: ls -la *.pkl")
-        print("4. If needed, train the model by running SVM.ipynb")
-        return None, None, None
+    # Find which model file exists
+    for model_file, description in model_files_priority:
+        if os.path.exists(model_file):
+            model_name = description
+            try:
+                model = joblib.load(model_file)
+                label_encoder = joblib.load('label_encoder.pkl')
+                
+                # Check if scaler is needed (SVM models typically need it)
+                if os.path.exists('feature_scaler.pkl'):
+                    try:
+                        scaler = joblib.load('feature_scaler.pkl')
+                    except:
+                        pass
+                
+                print(f"✅ Loaded {model_name} successfully")
+                print(f"📊 Model Type: {type(model).__name__}")
+                print(f"🏷️  Labels: {', '.join(label_encoder.classes_)}")
+                return model, scaler, label_encoder
+                
+            except Exception as e:
+                print(f"⚠️  Error loading {model_file}: {e}")
+                continue
     
-    try:
-        svm_model = joblib.load('svm_motion_classifier.pkl')
-        scaler = joblib.load('feature_scaler.pkl')
-        label_encoder = joblib.load('label_encoder.pkl')
-        
-        print("✅ Loaded trained SVM model successfully")
-        print(f"📊 Model: {type(svm_model).__name__} with {svm_model.kernel} kernel")
-        print(f"🏷️  Labels: {', '.join(label_encoder.classes_)}")
-        return svm_model, scaler, label_encoder
-        
-    except Exception as e:
-        print(f"❌ Error loading model files: {e}")
-        print("💡 Model files may be corrupted. Try re-training the model.")
-        return None, None, None
+    # If we get here, no model was found
+    print("❌ No trained model found!")
+    print("\n💡 Solutions:")
+    print("1. Train a model using: python3 train_best_model.py")
+    print("   OR run SVM.ipynb to train SVM model")
+    print("2. Make sure you're in: sketch_oct8a/")
+    print("3. Check files exist: ls -la *.pkl")
+    return None, None, None
 
 # Load the model
 import os
@@ -80,6 +87,7 @@ def predict_movement_direction(data_string):
     """
     Parse BLE data and predict movement direction
     Input format: meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,wristArmed,label,studentId
+    Works with both scaled (SVM) and unscaled (RandomForest, XGBoost) models
     """
     global prediction_count
     
@@ -99,22 +107,27 @@ def predict_movement_direction(data_string):
         except (ValueError, IndexError):
             return None
         
-        # Convert to numpy array with proper shape for scaler
-        # The scaler expects a 2D array: (n_samples, n_features)
+        # Convert to numpy array with proper shape
         features_array = np.array([feature_values], dtype=np.float32)
         
-        # Scale features using the trained scaler
-        features_scaled = scaler.transform(features_array)
+        # Scale features if scaler is available (for SVM models)
+        if scaler is not None:
+            features_to_predict = scaler.transform(features_array)
+        else:
+            features_to_predict = features_array
         
         # Make prediction
-        prediction_encoded = svm_model.predict(features_scaled)[0]
+        prediction_encoded = svm_model.predict(features_to_predict)[0]
         prediction_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
         
-        # Get confidence score
+        # Get confidence score (works for most sklearn models)
         confidence = 0.0
         if hasattr(svm_model, 'predict_proba'):
-            probabilities = svm_model.predict_proba(features_scaled)[0]
+            probabilities = svm_model.predict_proba(features_to_predict)[0]
             confidence = float(max(probabilities))
+        elif hasattr(svm_model, 'oob_score_'):
+            # For RandomForest, use feature importance as proxy
+            confidence = 0.5
         
         prediction_count += 1
         

@@ -25,8 +25,8 @@ BLEStringCharacteristic featuresChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLE
 // ================= CONFIG =================
 const unsigned long SAMPLE_DT_MS     = 20;   // 50 Hz sampling
 const unsigned long REPORT_EVERY_MS  = 100;  // Compute features every 100 ms
-const size_t        SMA_LEN          = 3;    // Smoothing
-const size_t        WINDOW_SIZE      = 20;   // Sliding window for features
+const size_t        SMA_LEN          = 2;    // Reduced smoothing to preserve motion details (was 3)
+const size_t        WINDOW_SIZE      = 15;   // Reduced window size for faster response (was 20)
 const float         THRESHOLD        = 0.05; // Movement detection threshold
 // Debug helper: if true, start collecting immediately when armed (skip settle) so you see debug prints
 const bool DEBUG_IMMEDIATE_START = false;
@@ -39,7 +39,7 @@ const unsigned long ARM_SETTLE_MS      = 700;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "";
+String CURRENT_LABEL = "right";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
 String STUDENT_ID = "11611553";
