@@ -91,24 +91,22 @@ def predict_movement_direction(data_string):
             
         # Extract features (first 10 values)
         features = [float(values[i]) for i in range(10)]
-        actual_label = values[10] if len(values) > 10 else "unknown"
-        
-        # Skip 'still' predictions for cleaner output
-        if actual_label == 'still':
-            return None
             
-        # Scale features
-        features_scaled = scaler.transform([features])
+        # Convert to numpy array with proper dtype to avoid casting issues
+        features_array = np.array([features], dtype=np.float32)
         
-        # Make prediction
-        prediction_encoded = svm_model.predict(features_scaled)[0]
-        prediction_label = label_encoder.inverse_transform([prediction_encoded])[0]
+        # Scale features
+        features_scaled = scaler.transform(features_array)
+        
+        # Make prediction with proper data type handling
+        prediction_encoded = svm_model.predict(features_scaled.astype(np.float32))[0]
+        prediction_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
         
         # Get prediction probabilities if available
         confidence = 0.0
         if hasattr(svm_model, 'predict_proba'):
-            probabilities = svm_model.predict_proba(features_scaled)[0]
-            confidence = max(probabilities)
+            probabilities = svm_model.predict_proba(features_scaled.astype(np.float32))[0]
+            confidence = float(max(probabilities))
         
         prediction_count += 1
         
@@ -130,7 +128,6 @@ def predict_movement_direction(data_string):
         result = {
             'timestamp': timestamp,
             'prediction': prediction_label,
-            'actual': actual_label,
             'confidence': confidence,
             'icon': status_icon,
             'features': features
@@ -161,7 +158,6 @@ def notification_handler(sender, data):
             # Display prediction
             print(f"{result['icon']} [{result['timestamp']}] "
                   f"Predicted: {result['prediction'].upper()} "
-                  f"| Actual: {result['actual']} "
                   f"| Confidence: {result['confidence']:.2f}")
             
             # Show feature values occasionally for debugging
@@ -203,14 +199,24 @@ async def run_live_prediction(address):
     
     try:
         async with BleakClient(address) as client:
+            if not client.is_connected:
+                print("❌ Failed to connect")
+                return
+            
             print("✅ Connected successfully!")
             
-            # Check if the service exists
-            services = await client.get_services()
-            motion_service = services.get_service(SERVICE_UUID)
+            # Check if our service exists (using newer Bleak API)
+            service_found = False
+            for service in client.services:
+                if service.uuid.lower() == SERVICE_UUID.lower():
+                    service_found = True
+                    break
             
-            if not motion_service:
-                print(f"❌ Motion service {SERVICE_UUID} not found")
+            if not service_found:
+                print(f"❌ Service {SERVICE_UUID} not found on device")
+                print("   Available services:")
+                for service in client.services:
+                    print(f"   - {service.uuid}")
                 return
             
             print("🎯 Starting live movement direction prediction...")

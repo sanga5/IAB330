@@ -27,7 +27,9 @@ const unsigned long SAMPLE_DT_MS     = 20;   // 50 Hz sampling
 const unsigned long REPORT_EVERY_MS  = 100;  // Compute features every 100 ms
 const size_t        SMA_LEN          = 3;    // Smoothing
 const size_t        WINDOW_SIZE      = 20;   // Sliding window for features
-const float         THRESHOLD        = 0.05; // Movement detection threshold (increased for new orientation)
+const float         THRESHOLD        = 0.05; // Movement detection threshold
+// Debug helper: if true, start collecting immediately when armed (skip settle) so you see debug prints
+const bool DEBUG_IMMEDIATE_START = false;
 
 // Wrist orientation thresholds (for armed/disarmed state detection)
 const float         ARM_THRESHOLD      = 0.4;  // Rotate wrist RIGHT past this (X goes positive) to arm
@@ -142,6 +144,9 @@ void loop() {
   static unsigned long armTime = 0;  // Time when wrist was armed (for settling)
   static unsigned long disarmTime = 0;  // Time when wrist was disarmed (for settling)
   static float currentSmoothAx = 0;  // Current smoothed X value for disarming detection
+  // One-shot collection state: start after arm-settle, collect until disarm, emit once
+  static bool collectingWindow = false;
+  static bool windowEmitted = false;
 
   unsigned long now = millis();
 
@@ -175,23 +180,74 @@ void loop() {
       if (!isArmed && smoothAx > ARM_THRESHOLD) {
         isArmed = true;
         armTime = now;  // Record when we armed (for settling period)
-        // Serial.println(">>> ARMED - Settling...");  // Commented out for clean CSV data
+        // Reset per-arm state so we can collect a fresh window after settling
+        collectingWindow = false;
+        windowEmitted = false;
+        Serial.print(">>> ARMED - entered arm state, waiting to settle (armTime=");
+        Serial.print(armTime);
+        Serial.print(") expected ready at ");
+        Serial.println(armTime + ARM_SETTLE_MS);
+        if (DEBUG_IMMEDIATE_START) {
+          collectingWindow = true;
+          cntX = cntY = cntZ = 0;
+          headX = headY = headZ = 0;
+          Serial.println(">>> DEBUG IMMEDIATE START: collectingWindow=true");
+        }
       }
       else if (isArmed && smoothAx < DISARM_THRESHOLD) {
+        // Transition: armed -> disarmed. When disarming, if we were collecting a one-shot
+        // window, compute features once and emit that sample for ML.
         isArmed = false;
         disarmTime = now;  // Record when we disarmed (for settling period)
         inMotion = false;  // Force end any ongoing motion
         motionLabel = "still";  // Reset label immediately
-        // Serial.println(">>> DISARMED - Safe to recenter");  // Commented out for clean CSV data
+
+        if (collectingWindow && !windowEmitted) {
+          float meanX, sdX, rangeX;
+          float meanY, sdY, rangeY;
+          float meanZ, sdZ, rangeZ;
+          bool okX = computeFeatures(winX, cntX, meanX, sdX, rangeX);
+          bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
+          bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
+
+          if (okX && okY && okZ) {
+            // Emit exactly one CSV line for this arm/disarm cycle labeled with CURRENT_LABEL
+            char out[200];
+            snprintf(out, sizeof(out),
+              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
+              meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
+              0,
+              CURRENT_LABEL.c_str(),
+              STUDENT_ID.c_str());
+
+            Serial.println(">>> DISARM EMIT (one-shot):");
+            Serial.println(out);
+            BLEDevice central2 = BLE.central();
+            if (central2 && central2.connected()) {
+              featuresChar.writeValue(out);
+            }
+          }
+        }
+
+        // End collection and mark as emitted so we don't re-emit until next arm
+        collectingWindow = false;
+        windowEmitted = true;
+
+        // Clear windows ready for next arm
+        cntX = cntY = cntZ = 0;
+        headX = headY = headZ = 0;
       }
       
       // Smooth acceleration for motion detection (existing logic)
       float fx = smaUpdate(ax, smaBufX, smaHeadX, smaCountX);
       float fy = smaUpdate(ay, smaBufY, smaHeadY, smaCountY);
       float fz = smaUpdate(az, smaBufZ, smaHeadZ, smaCountZ);
-      pushWin(fx, winX, headX, cntX);
-      pushWin(fy, winY, headY, cntY);
-      pushWin(fz, winZ, headZ, cntZ);
+      // Only push into the ML feature window while we're explicitly collecting (until disarm)
+      if (collectingWindow && !windowEmitted) {
+        pushWin(fx, winX, headX, cntX);
+        pushWin(fy, winY, headY, cntY);
+        pushWin(fz, winZ, headZ, cntZ);
+      }
     }
   }
   float gx, gy, gz;
@@ -200,9 +256,31 @@ void loop() {
   float gyroY = fabs(gy);
   float gyroZ = fabs(gz);
 
-  // Compute features periodically
+  // Compute features periodically (but skip periodic emission while we're in one-shot collection)
   if (now - lastReport >= REPORT_EVERY_MS) {
     lastReport = now;
+
+    // If we're collecting a one-shot window, don't run the periodic compute/emit path.
+    // But first check settle status so we can start collection when armed+settled.
+    static bool wasSettling = false;
+    bool isArmSettled = !isArmed || (now - armTime >= ARM_SETTLE_MS);
+    bool isDisarmSettled = (now - disarmTime >= DISARM_SETTLE_MS);
+    bool isSettled = isArmSettled && isDisarmSettled;
+
+    // If we're armed and settled and haven't started collecting yet, start collecting.
+    if (isArmed && isSettled && !collectingWindow && !windowEmitted) {
+      collectingWindow = true;
+      // clear any previous data
+      cntX = cntY = cntZ = 0;
+      headX = headY = headZ = 0;
+      for (size_t i = 0; i < WINDOW_SIZE; i++) { winX[i] = winY[i] = winZ[i] = 0.0f; }
+      Serial.println(">>> START COLLECTING one-shot window after arm-settle");
+    }
+
+    if (collectingWindow && !windowEmitted) {
+      // still collecting -- skip periodic emission
+    }
+    else {
 
     float meanX, sdX, rangeX;
     float meanY, sdY, rangeY;
@@ -212,7 +290,7 @@ void loop() {
     bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
     bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
 
-    if (okX && okY && okZ) {
+  if (okX && okY && okZ) {
       // Check if we're in settling period (either after arming or disarming)
       static bool wasSettling = false;
       bool isArmSettled = !isArmed || (now - armTime >= ARM_SETTLE_MS);
@@ -231,55 +309,62 @@ void loop() {
         wasSettling = false;
       }
       
-      // Check if we're in the disarming zone (starting to tilt back to flat)
-      bool isDisarming = isArmed && (currentSmoothAx < DISARMING_ZONE);
-      
-      // PRIORITY: If we're disarming, immediately end any motion and ignore new motion
-      if (isDisarming) {
-        if (inMotion) {
+
+
+  // While collectingWindow is active we do NOT emit periodic lines; we'll emit once on disarm.
+  if (!collectingWindow) {
+        // Existing motion-detection/telemetry behavior when not in one-shot collection mode.
+        // Check if we're in the disarming zone (starting to tilt back to flat)
+        bool isDisarming = isArmed && (currentSmoothAx < DISARMING_ZONE);
+
+        // PRIORITY: If we're disarming, immediately end any motion and ignore new motion
+        if (isDisarming) {
+          if (inMotion) {
+            inMotion = false;
+            motionLabel = "still";
+          }
+        }
+        // Only detect motion if NOT disarming
+        else {
+          bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
+
+          if (motionNow && !inMotion && isArmed && isSettled) {
+            // Motion detected AND wrist is armed AND settling period over - record as genuine gesture
+            inMotion = true;
+            motionLabel = CURRENT_LABEL;
+          } 
+          else if (!motionNow && inMotion) {
+            // Motion ended naturally
+            inMotion = false;
+            motionLabel = "still";
+          }
+        }
+
+        // Handle motion when not armed (recentering)
+        if (!isArmed && inMotion) {
           inMotion = false;
           motionLabel = "still";
         }
-      }
-      // Only detect motion if NOT disarming
-      else {
-        bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
 
-        if (motionNow && !inMotion && isArmed && isSettled) {
-          // Motion detected AND wrist is armed AND settling period over - record as genuine gesture
-          inMotion = true;
-          motionLabel = CURRENT_LABEL;
-        } 
-        else if (!motionNow && inMotion) {
-          // Motion ended naturally
-          inMotion = false;
-          motionLabel = "still";
+        // Print CSV line with wrist armed status and student ID (periodic telemetry)
+        char out[200];
+        snprintf(out, sizeof(out),
+          "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
+          meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
+          isArmed ? 1 : 0,
+          motionLabel.c_str(),
+          STUDENT_ID.c_str());
+        
+        // Send to Serial
+        Serial.println(out);
+        
+        // Send to BLE if client is connected
+        BLEDevice central = BLE.central();
+        if (central && central.connected()) {
+          featuresChar.writeValue(out);
         }
-      }
-      
-      // Handle motion when not armed (recentering)
-      if (!isArmed && inMotion) {
-        inMotion = false;
-        motionLabel = "still";
-      }
-
-      // Print CSV line with wrist armed status and student ID
-      char out[200];
-      snprintf(out, sizeof(out),
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
-        meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
-        isArmed ? 1 : 0,
-        motionLabel.c_str(),
-        STUDENT_ID.c_str());
-      
-      // Send to Serial
-      Serial.println(out);
-      
-      // Send to BLE if client is connected
-      BLEDevice central = BLE.central();
-      if (central && central.connected()) {
-        featuresChar.writeValue(out);
       }
     }
   }
+}
 }

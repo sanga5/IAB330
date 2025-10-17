@@ -11,8 +11,13 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Model files (optional - these are generated)
-*.pkl
+# Model files - UNCOMMENT the line below if you DON'T want to include trained models in git
+# *.pkl
+
+# Include these specific model files in the repository
+!svm_motion_classifier.pkl
+!feature_scaler.pkl  
+!label_encoder.pkl
 
 # CSV data files (optional - these are generated)
 motion_data_*.csv
