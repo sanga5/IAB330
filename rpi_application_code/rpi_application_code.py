@@ -13,19 +13,24 @@ TARGET_NAME_KEYWORDS = ["Nano33"]
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 CHAR_NOTIFY_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 
-ML_FILENAME = 'best_motion_classifier.pkl'
-SCALER_FILENAME = 'feature_scaler.pkl'
+ML_FILENAME = 'svm_model.pkl'
+SCALER_FILENAME = 'scaler.pkl'
 LABEL_ENCODER_FILENAME = 'label_encoder.pkl'
 
 # Load model and scaler once at startup
-print("Loading model, scaler, and label encoder...")
+print("Loading model and scaler...")
 try:
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         model = joblib.load(ML_FILENAME)
         scaler = joblib.load(SCALER_FILENAME)
-        label_encoder = joblib.load(LABEL_ENCODER_FILENAME)
-    print("Model, scaler, and label encoder loaded successfully")
+        # Label encoder may not exist, so handle gracefully
+        try:
+            label_encoder = joblib.load(LABEL_ENCODER_FILENAME)
+        except FileNotFoundError:
+            print(f"Warning: {LABEL_ENCODER_FILENAME} not found, using numeric predictions")
+            label_encoder = None
+    print("Model and scaler loaded successfully")
 except FileNotFoundError as e:
     print(f"Error: Could not find model files: {e}")
     sys.exit(1)
@@ -53,35 +58,13 @@ def handle_notify(_sender, data: bytearray):
         
         # Predict using model
         prediction_encoded = model.predict(features_normalized)[0]
-        predicted_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
-        print(f"Predicted: {predicted_label}")
-    except Exception as e:
-        print(f"Error processing data: {e}")
-
-def handle_notify(_sender, data: bytearray):
-    global model, scaler, label_encoder
-    msg = data.decode("utf-8", errors="ignore").strip()
-    print(f"[notify] {msg}")
-    
-    parts = [p for p in msg.replace(" ", "").split(",") if p]
-    
-    try:
-        # Extract only the first 18 numeric features
-        if len(parts) < 18:
-            print(f"Error: Expected at least 18 features, got {len(parts)}")
-            return
         
-        feature_values = np.array([float(parts[i]) for i in range(18)], dtype=np.float32)
-        features = feature_values.reshape(1, -1)
-
-        # Transform features using scaler
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            features_normalized = scaler.transform(features)
+        # Decode prediction if label encoder exists, otherwise show numeric
+        if label_encoder is not None:
+            predicted_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
+        else:
+            predicted_label = prediction_encoded
         
-        # Predict using model
-        prediction_encoded = model.predict(features_normalized)[0]
-        predicted_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
         print(f"Predicted: {predicted_label}")
     except Exception as e:
         print(f"Error processing data: {e}")
