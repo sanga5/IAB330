@@ -39,7 +39,7 @@ const unsigned long ARM_SETTLE_MS      = 200;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "right";
+String CURRENT_LABEL = "push";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
 String STUDENT_ID = "11611553";
