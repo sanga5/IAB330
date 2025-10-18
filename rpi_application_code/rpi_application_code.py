@@ -46,11 +46,12 @@ def handle_notify(_sender, data: bytearray):
     parts = [p for p in msg.replace(" ", "").split(",") if p]
     
     try:
-        # Extract only the first 18 numeric features
+        # Extract only the first 18 numeric features (skip label and studentId at end)
         if len(parts) < 18:
             print(f"Error: Expected at least 18 features, got {len(parts)}")
             return
         
+        # Convert first 18 elements to floats (skip label and studentId)
         feature_values = np.array([float(parts[i]) for i in range(18)], dtype=np.float32)
         features = feature_values.reshape(1, -1)
 
@@ -60,10 +61,10 @@ def handle_notify(_sender, data: bytearray):
             features_normalized = scaler.transform(features)
         
         # Predict using model
-        prediction_encoded = model.predict(features_normalized)[0]
+        prediction_encoded = int(model.predict(features_normalized)[0])
         
         # Decode prediction using manual label map
-        predicted_label = LABEL_MAP.get(int(prediction_encoded), f"Unknown_{prediction_encoded}")
+        predicted_label = LABEL_MAP.get(prediction_encoded, f"Unknown_{prediction_encoded}")
         
         print(f"Predicted: {predicted_label}")
     except Exception as e:
