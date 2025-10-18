@@ -11,22 +11,30 @@ CHAR_NOTIFY_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 ML_FILENAME = 'svm_model.pkl'
 SCALER_FILENAME = 'scaler.pkl'
 
+# Load model and scaler once at startup
+print("Loading model and scaler...")
+with open(ML_FILENAME, 'rb') as file:
+    model = pickle.load(file)
+with open(SCALER_FILENAME, 'rb') as file:
+    scaler = pickle.load(file)
+
 def handle_notify(_sender, data: bytearray):
+    global model, scaler
     msg = data.decode("utf-8", errors="ignore").strip()
     print(f"[notify] {msg}")
-    with open(ML_FILENAME, 'rb') as file:
-        model = pickle.load(file)
-    with open(SCALER_FILENAME, 'rb') as file:
-        scaler = pickle.load(file)
-    parts = [p for p in text.replace(" ", "").split(",") if p]
     
-    features = np.array([float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]), float(parts[5]),
-                         float(parts[6]), float(parts[7]), float(parts[8]), float(parts[9]), float(parts[10]), float(parts[11]),
-                         float(parts[12]), float(parts[13]), float(parts[14]), float(parts[15]), float(parts[16]), float(parts[17])]).reshape(1, -1)
+    parts = [p for p in msg.replace(" ", "").split(",") if p]
+    
+    try:
+        features = np.array([float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]), float(parts[5]),
+                             float(parts[6]), float(parts[7]), float(parts[8]), float(parts[9]), float(parts[10]), float(parts[11]),
+                             float(parts[12]), float(parts[13]), float(parts[14]), float(parts[15]), float(parts[16]), float(parts[17])]).reshape(1, -1)
 
-    features_normalized = scaler.transform(features)
-    predicted_label = model.predict(features_normalized)[0]
-    print(predicted_label)
+        features_normalized = scaler.transform(features)
+        predicted_label = model.predict(features_normalized)[0]
+        print(f"🎯 Predicted: {predicted_label}")
+    except Exception as e:
+        print(f"Error processing data: {e}")
 
 async def main():
     print(f"Scanning...")
