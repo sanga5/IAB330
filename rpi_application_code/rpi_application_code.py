@@ -17,6 +17,15 @@ ML_FILENAME = 'svm_model.pkl'
 SCALER_FILENAME = 'scaler.pkl'
 LABEL_ENCODER_FILENAME = 'label_encoder.pkl'
 
+# Manual label mapping (from training data encoding)
+LABEL_MAP = {
+    0: 'down',
+    1: 'left',
+    2: 'push',
+    3: 'right',
+    4: 'up'
+}
+
 # Load model and scaler once at startup
 print("Loading model and scaler...")
 try:
@@ -24,19 +33,13 @@ try:
         warnings.simplefilter('ignore')
         model = joblib.load(ML_FILENAME)
         scaler = joblib.load(SCALER_FILENAME)
-        # Label encoder may not exist, so handle gracefully
-        try:
-            label_encoder = joblib.load(LABEL_ENCODER_FILENAME)
-        except FileNotFoundError:
-            print(f"Warning: {LABEL_ENCODER_FILENAME} not found, using numeric predictions")
-            label_encoder = None
     print("Model and scaler loaded successfully")
 except FileNotFoundError as e:
     print(f"Error: Could not find model files: {e}")
     sys.exit(1)
 
 def handle_notify(_sender, data: bytearray):
-    global model, scaler, label_encoder
+    global model, scaler
     msg = data.decode("utf-8", errors="ignore").strip()
     print(f"[notify] {msg}")
     
@@ -59,11 +62,8 @@ def handle_notify(_sender, data: bytearray):
         # Predict using model
         prediction_encoded = model.predict(features_normalized)[0]
         
-        # Decode prediction if label encoder exists, otherwise show numeric
-        if label_encoder is not None:
-            predicted_label = label_encoder.inverse_transform([int(prediction_encoded)])[0]
-        else:
-            predicted_label = prediction_encoded
+        # Decode prediction using manual label map
+        predicted_label = LABEL_MAP.get(int(prediction_encoded), f"Unknown_{prediction_encoded}")
         
         print(f"Predicted: {predicted_label}")
     except Exception as e:
