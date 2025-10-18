@@ -35,7 +35,7 @@ const bool DEBUG_IMMEDIATE_START = false;
 const float         ARM_THRESHOLD      = 0.4;  // Rotate wrist RIGHT past this (X goes positive) to arm
 const float         DISARM_THRESHOLD   = 0.15; // Return past this (X back toward 0) to disarm
 const float         DISARMING_ZONE     = 0.45; // Below this = starting to disarm, disable gesture detection
-const unsigned long ARM_SETTLE_MS      = 600;  // Wait 700ms after arming before detecting gestures
+const unsigned long ARM_SETTLE_MS      = 200;  // Wait 700ms after arming before detecting gestures
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
