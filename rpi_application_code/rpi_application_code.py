@@ -17,13 +17,14 @@ ML_FILENAME = 'svm_model.pkl'
 SCALER_FILENAME = 'scaler.pkl'
 LABEL_ENCODER_FILENAME = 'label_encoder.pkl'
 
-# Manual label mapping (from training data encoding)
+# Manual label mapping (from SVM.ipynb training)
+# label_map = {'right': 0, 'left': 1,  'up': 2, 'down': 3, 'push':4}
 LABEL_MAP = {
-    0: 'down',
+    0: 'right',
     1: 'left',
-    2: 'push',
-    3: 'right',
-    4: 'up'
+    2: 'up',
+    3: 'down',
+    4: 'push'
 }
 
 # Load model and scaler once at startup
