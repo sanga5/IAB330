@@ -112,8 +112,8 @@ void setup() {
   }
 
   // Set BLE local name and advertised service
-  BLE.setLocalName("Nano33IoT_Group5");
-  BLE.setDeviceName("Nano33IoT_Group5");
+  BLE.setLocalName("Group5");
+  BLE.setDeviceName("Group5");
   BLE.setAdvertisedService(motionService);
 
   // Add characteristic to service
