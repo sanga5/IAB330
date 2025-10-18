@@ -9,7 +9,7 @@ import os
 # Suppress sklearn warnings about version mismatches and feature names
 warnings.filterwarnings('ignore')
 
-TARGET_NAME_KEYWORDS = ["Nano33"]
+TARGET_NAME_KEYWORDS = ["Group5"]
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 CHAR_NOTIFY_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 
