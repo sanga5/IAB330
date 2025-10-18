@@ -39,7 +39,7 @@ const unsigned long ARM_SETTLE_MS      = 600;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "push";
+String CURRENT_LABEL = "right";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
 String STUDENT_ID = "11611553";
@@ -119,7 +119,8 @@ void setup() {
   }
 
   // Set BLE local name and advertised service
-  BLE.setLocalName("Group5");
+  BLE.setLocalName("Nano33IoT_Group5");
+  BLE.setDeviceName("Nano33IoT_Group5");
   BLE.setAdvertisedService(motionService);
 
   // Add characteristic to service
@@ -210,16 +211,16 @@ void loop() {
         motionLabel = "still";  // Reset label immediately
 
         if (collectingWindow && !windowEmitted) {
-          float meanX, sdX, rangeX;
-          float meanY, sdY, rangeY;
-          float meanZ, sdZ, rangeZ;
+          float meanAx, sdAx, rangeAx;
+          float meanAy, sdAy, rangeAy;
+          float meanAz, sdAz, rangeAz;
           float meanGx, sdGx, rangeGx;
           float meanGy, sdGy, rangeGy;
           float meanGz, sdGz, rangeGz;
           
-          bool okX = computeFeatures(winX, cntX, meanX, sdX, rangeX);
-          bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
-          bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
+          bool okX = computeFeatures(winX, cntX, meanAx, sdAx, rangeAx);
+          bool okY = computeFeatures(winY, cntY, meanAy, sdAy, rangeAy);
+          bool okZ = computeFeatures(winZ, cntZ, meanAz, sdAz, rangeAz);
           bool okGx = computeFeatures(winGx, cntGx, meanGx, sdGx, rangeGx);
           bool okGy = computeFeatures(winGy, cntGy, meanGy, sdGy, rangeGy);
           bool okGz = computeFeatures(winGz, cntGz, meanGz, sdGz, rangeGz);
@@ -229,7 +230,7 @@ void loop() {
             char out[300];
             snprintf(out, sizeof(out),
               "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s,%s",
-              meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
+              meanAx, sdAx, rangeAx, meanAy, sdAy, rangeAy, meanAz, sdAz, rangeAz,
               meanGx, sdGx, rangeGx, meanGy, sdGy, rangeGy, meanGz, sdGz, rangeGz,
               CURRENT_LABEL.c_str(),
               STUDENT_ID.c_str());

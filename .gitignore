@@ -1,0 +1,29 @@
+# Virtual environment
+sketch_oct8a/venv/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Model files - UNCOMMENT the line below if you DON'T want to include trained models in git
+# *.pkl
+
+# Include these specific model files in the repository
+!svm_motion_classifier.pkl
+!feature_scaler.pkl  
+!label_encoder.pkl
+
+# CSV data files (optional - these are generated)
+motion_data_*.csv
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/

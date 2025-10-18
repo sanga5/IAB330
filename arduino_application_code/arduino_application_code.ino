@@ -20,7 +20,7 @@
 #include <math.h>
 
 BLEService motionService("19B10000-E8F2-537E-4F6C-D104768A1214");
-BLEStringCharacteristic featuresChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify, 200);
+BLEStringCharacteristic featuresChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify, 300);
 
 // ================= CONFIG =================
 const unsigned long SAMPLE_DT_MS     = 20;   // 50 Hz sampling
@@ -37,12 +37,6 @@ const float         DISARM_THRESHOLD   = 0.15; // Return past this (X back towar
 const float         DISARMING_ZONE     = 0.45; // Below this = starting to disarm, disable gesture detection
 const unsigned long ARM_SETTLE_MS      = 600;  // Wait 700ms after arming before detecting gestures
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
-
-// Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "push";
-
-// Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
-String STUDENT_ID = "11611553";
 
 // BLE UUIDs (optional if you’re only using Serial)
 const char* SERVICE_UUID       = "19B10000-E8F2-537E-4F6C-D104768A1214";
@@ -101,7 +95,6 @@ bool computeFeatures(const float *win, size_t cnt, float &mean, float &sd, float
   return true;
 }
 
-// ================= Setup =================
 void setup() {
   Serial.begin(115200);
   while(!Serial);
@@ -119,7 +112,8 @@ void setup() {
   }
 
   // Set BLE local name and advertised service
-  BLE.setLocalName("Group5");
+  BLE.setLocalName("Nano33IoT_Group5");
+  BLE.setDeviceName("Nano33IoT_Group5");
   BLE.setAdvertisedService(motionService);
 
   // Add characteristic to service
@@ -129,16 +123,15 @@ void setup() {
   BLE.addService(motionService);
 
   // Set initial value
-  featuresChar.writeValue("0,0,0,0,0,0,0,0,0,0,still,0");
+  featuresChar.writeValue("0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0");
 
   // Start advertising
   BLE.advertise();
 
-  Serial.println("meanX,sdX,rangeX,meanY,sdY,rangeY,meanZ,sdZ,rangeZ,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz,label,studentId");
-  Serial.println("BLE Active - Device name: Arduino Nano 33 IoT");
+  Serial.println("meanAx,sdAx,rangeAx,meanAy,sdAy,rangeAy,meanAz,sdAz,rangeAz,meanGx,sdGx,rangeGx,meanGy,sdGy,rangeGy,meanGz,sdGz,rangeGz");
+  Serial.println("BLE Active - Device name: Nano33IoT_Group5");
 }
 
-// ================= Loop =================
 void loop() {
   static unsigned long lastSample = 0;
   static unsigned long lastGyroSample = 0;
@@ -210,16 +203,16 @@ void loop() {
         motionLabel = "still";  // Reset label immediately
 
         if (collectingWindow && !windowEmitted) {
-          float meanX, sdX, rangeX;
-          float meanY, sdY, rangeY;
-          float meanZ, sdZ, rangeZ;
+          float meanAx, sdAx, rangeAx;
+          float meanAy, sdAy, rangeAy;
+          float meanAz, sdAz, rangeAz;
           float meanGx, sdGx, rangeGx;
           float meanGy, sdGy, rangeGy;
           float meanGz, sdGz, rangeGz;
           
-          bool okX = computeFeatures(winX, cntX, meanX, sdX, rangeX);
-          bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
-          bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
+          bool okX = computeFeatures(winX, cntX, meanAx, sdAx, rangeAx);
+          bool okY = computeFeatures(winY, cntY, meanAy, sdAy, rangeAy);
+          bool okZ = computeFeatures(winZ, cntZ, meanAz, sdAz, rangeAz);
           bool okGx = computeFeatures(winGx, cntGx, meanGx, sdGx, rangeGx);
           bool okGy = computeFeatures(winGy, cntGy, meanGy, sdGy, rangeGy);
           bool okGz = computeFeatures(winGz, cntGz, meanGz, sdGz, rangeGz);
@@ -228,11 +221,9 @@ void loop() {
             // Emit exactly one CSV line for this arm/disarm cycle labeled with CURRENT_LABEL
             char out[300];
             snprintf(out, sizeof(out),
-              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s,%s",
-              meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
-              meanGx, sdGx, rangeGx, meanGy, sdGy, rangeGy, meanGz, sdGz, rangeGz,
-              CURRENT_LABEL.c_str(),
-              STUDENT_ID.c_str());
+              "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
+              meanAx, sdAx, rangeAx, meanAy, sdAy, rangeAy, meanAz, sdAz, rangeAz,
+              meanGx, sdGx, rangeGx, meanGy, sdGy, rangeGy, meanGz, sdGz, rangeGz);
 
             Serial.println(out);
             BLEDevice central2 = BLE.central();
@@ -303,95 +294,8 @@ void loop() {
       for (size_t i = 0; i < WINDOW_SIZE; i++) { winX[i] = winY[i] = winZ[i] = 0.0f; winGx[i] = winGy[i] = winGz[i] = 0.0f; }
       Serial.println(">>> START COLLECTING one-shot window after arm-settle");
     }
-
-    if (collectingWindow && !windowEmitted) {
-      // still collecting -- skip periodic emission
-    }
-    else {
-
-    float meanX, sdX, rangeX;
-    float meanY, sdY, rangeY;
-    float meanZ, sdZ, rangeZ;
-
-    bool okX = computeFeatures(winX, cntX, meanX, sdX, rangeX);
-    bool okY = computeFeatures(winY, cntY, meanY, sdY, rangeY);
-    bool okZ = computeFeatures(winZ, cntZ, meanZ, sdZ, rangeZ);
-
-  if (okX && okY && okZ) {
-      // Check if we're in settling period (either after arming or disarming)
-      static bool wasSettling = false;
-      bool isArmSettled = !isArmed || (now - armTime >= ARM_SETTLE_MS);
-      bool isDisarmSettled = (now - disarmTime >= DISARM_SETTLE_MS);
-      bool isSettled = isArmSettled && isDisarmSettled;
-      
-      // Notify when arm settling period completes
-      if (isArmed && !wasSettling && !isArmSettled) {
-        wasSettling = true;
-      }
-      else if (isArmed && wasSettling && isArmSettled) {
-        // Serial.println(">>> READY - Gesture detection active");  // Commented out for clean CSV data
-        wasSettling = false;
-      }
-      else if (!isArmed) {
-        wasSettling = false;
-      }
-      
-
-
-  // While collectingWindow is active we do NOT emit periodic lines; we'll emit once on disarm.
-  if (!collectingWindow) {
-        // Existing motion-detection/telemetry behavior when not in one-shot collection mode.
-        // Check if we're in the disarming zone (starting to tilt back to flat)
-        bool isDisarming = isArmed && (currentSmoothAx < DISARMING_ZONE);
-
-        // PRIORITY: If we're disarming, immediately end any motion and ignore new motion
-        if (isDisarming) {
-          if (inMotion) {
-            inMotion = false;
-            motionLabel = "still";
-          }
-        }
-        // Only detect motion if NOT disarming
-        else {
-          bool motionNow = (sdX > THRESHOLD || sdY > THRESHOLD || sdZ > THRESHOLD);
-
-          if (motionNow && !inMotion && isArmed && isSettled) {
-            // Motion detected AND wrist is armed AND settling period over - record as genuine gesture
-            inMotion = true;
-            motionLabel = CURRENT_LABEL;
-          } 
-          else if (!motionNow && inMotion) {
-            // Motion ended naturally
-            inMotion = false;
-            motionLabel = "still";
-          }
-        }
-
-        // Handle motion when not armed (recentering)
-        if (!isArmed && inMotion) {
-          inMotion = false;
-          motionLabel = "still";
-        }
-
-        // Print CSV line with wrist armed status and student ID (periodic telemetry)
-        char out[200];
-        snprintf(out, sizeof(out),
-          "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%s,%s",
-          meanX, sdX, rangeX, meanY, sdY, rangeY, meanZ, sdZ, rangeZ,
-          isArmed ? 1 : 0,
-          motionLabel.c_str(),
-          STUDENT_ID.c_str());
-        
-        // Send to Serial
-        Serial.println(out);
-        
-        // Send to BLE if client is connected
-        BLEDevice central = BLE.central();
-        if (central && central.connected()) {
-          featuresChar.writeValue(out);
-        }
-      }
-    }
   }
+
 }
-}
+
+
