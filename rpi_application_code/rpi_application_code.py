@@ -70,7 +70,21 @@ def handle_notify(_sender, data: bytearray):
             features_normalized = scaler.transform(features)
         
         # Predict using model
-        prediction_encoded = int(model.predict(features_normalized)[0])
+        raw_prediction = model.predict(features_normalized)[0]
+        print(f"[debug] Raw prediction type: {type(raw_prediction)}, value: {raw_prediction}")
+        
+        # Try to convert to int - if it's a string, find the numeric code
+        try:
+            prediction_encoded = int(raw_prediction)
+        except (ValueError, TypeError):
+            # Model is predicting string - reverse lookup in LABEL_MAP
+            for code, label in LABEL_MAP.items():
+                if label == str(raw_prediction):
+                    prediction_encoded = code
+                    break
+            else:
+                print(f"Error: Unknown prediction: {raw_prediction}")
+                return
         
         # Decode prediction using manual label map
         predicted_label = LABEL_MAP.get(prediction_encoded, f"Unknown_{prediction_encoded}")
