@@ -2,7 +2,10 @@ import asyncio
 from bleak import BleakScanner, BleakClient, BleakError
 import pickle
 import numpy as np
+import warnings
 
+# Suppress sklearn warnings about version mismatches and feature names
+warnings.filterwarnings('ignore')
 
 TARGET_NAME_KEYWORDS = ["Nano33"]
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
@@ -17,6 +20,7 @@ with open(ML_FILENAME, 'rb') as file:
     model = pickle.load(file)
 with open(SCALER_FILENAME, 'rb') as file:
     scaler = pickle.load(file)
+print("Model and scaler loaded successfully")
 
 def handle_notify(_sender, data: bytearray):
     global model, scaler
@@ -26,13 +30,13 @@ def handle_notify(_sender, data: bytearray):
     parts = [p for p in msg.replace(" ", "").split(",") if p]
     
     try:
-        features = np.array([float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]), float(parts[5]),
-                             float(parts[6]), float(parts[7]), float(parts[8]), float(parts[9]), float(parts[10]), float(parts[11]),
-                             float(parts[12]), float(parts[13]), float(parts[14]), float(parts[15]), float(parts[16]), float(parts[17])]).reshape(1, -1)
+        # Convert to numpy array with proper dtype for NumPy 2.0.2 compatibility
+        feature_values = np.array([float(parts[i]) for i in range(18)], dtype=np.float64)
+        features = feature_values.reshape(1, -1)
 
         features_normalized = scaler.transform(features)
         predicted_label = model.predict(features_normalized)[0]
-        print(f"🎯 Predicted: {predicted_label}")
+        print(f"Predicted: {predicted_label}")
     except Exception as e:
         print(f"Error processing data: {e}")
 
