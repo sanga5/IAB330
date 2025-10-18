@@ -52,8 +52,16 @@ def handle_notify(_sender, data: bytearray):
             print(f"Error: Expected at least 18 features, got {len(parts)}")
             return
         
-        # Convert first 18 elements to floats (skip label and studentId)
-        feature_values = np.array([float(parts[i]) for i in range(18)], dtype=np.float32)
+        # Convert ONLY first 18 elements to floats, explicitly skip the rest
+        feature_list = []
+        for i in range(18):
+            try:
+                feature_list.append(float(parts[i]))
+            except (ValueError, IndexError):
+                print(f"Error: Could not parse feature {i} as float: {parts[i]}")
+                return
+        
+        feature_values = np.array(feature_list, dtype=np.float32)
         features = feature_values.reshape(1, -1)
 
         # Transform features using scaler
