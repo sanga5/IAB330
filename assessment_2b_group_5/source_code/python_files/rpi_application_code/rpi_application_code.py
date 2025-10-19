@@ -15,7 +15,6 @@ CHAR_NOTIFY_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214"
 
 ML_FILENAME = 'svm_model.pkl'
 SCALER_FILENAME = 'scaler.pkl'
-LABEL_ENCODER_FILENAME = 'label_encoder.pkl'
 
 # Manual label mapping (from SVM.ipynb training)
 # label_map = {'right': 0, 'left': 1,  'up': 2, 'down': 3, 'push':4}
