@@ -39,10 +39,10 @@ const unsigned long ARM_SETTLE_MS      = 200;  // Wait 700ms after arming before
 const unsigned long DISARM_SETTLE_MS   = 500;  // Wait 500ms after disarming to ignore transition
 
 // Set this label before each test motion (e.g. "right", "left", "up", "down") CHANGE THIS BEFORE RUNNING TESTS
-String CURRENT_LABEL = "push";
+String CURRENT_LABEL = "down";
 
 // Set this label to your student id CHANGE THIS BEFORE RUNNING TEST
-String STUDENT_ID = "11611553";
+String STUDENT_ID = "11611555";
 
 // BLE UUIDs (optional if you’re only using Serial)
 const char* SERVICE_UUID       = "19B10000-E8F2-537E-4F6C-D104768A1214";
@@ -97,7 +97,14 @@ bool computeFeatures(const float *win, size_t cnt, float &mean, float &sd, float
     varSum += d * d;
   }
   sd = sqrtf(varSum / cnt);
-  range = vmax - vmin;
+  // Find the value with the highest absolute value, preserving sign
+  float maxAbsVal = win[0];
+  for (size_t i = 1; i < cnt; i++) {
+    if (fabsf(win[i]) > fabsf(maxAbsVal)) {
+      maxAbsVal = win[i];
+    }
+  }
+  range = maxAbsVal;  // Use the signed max absolute value for range
   return true;
 }
 

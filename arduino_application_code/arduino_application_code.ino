@@ -91,7 +91,14 @@ bool computeFeatures(const float *win, size_t cnt, float &mean, float &sd, float
     varSum += d * d;
   }
   sd = sqrtf(varSum / cnt);
-  range = vmax - vmin;
+  // Find the value with the highest absolute value, preserving sign
+  float maxAbsVal = win[0];
+  for (size_t i = 1; i < cnt; i++) {
+    if (fabsf(win[i]) > fabsf(maxAbsVal)) {
+      maxAbsVal = win[i];
+    }
+  }
+  range = maxAbsVal;  // Use the signed max absolute value for range
   return true;
 }
 
