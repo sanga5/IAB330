@@ -72,14 +72,6 @@ def handle_notify(_sender, data: bytearray):
         # Predict using model
         raw_prediction = model.predict(features_normalized)[0]
         
-        # Get prediction probabilities for debugging
-        if hasattr(model, 'decision_function'):
-            decision_scores = model.decision_function(features_normalized)[0]
-            print(f"[debug] Decision scores: {decision_scores}")
-        
-        print(f"[debug] Raw prediction: {raw_prediction}")
-        print(f"[debug] Scaled features sample: {features_normalized[0, :3]}")
-        
         # Try to convert to int - if it's a string, find the numeric code
         try:
             prediction_encoded = int(raw_prediction)
